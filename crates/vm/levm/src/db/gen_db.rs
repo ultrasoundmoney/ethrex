@@ -225,6 +225,11 @@ pub struct GeneralizedDatabase {
     /// Optional tracker for BAL validation: records addresses accessed via load_account.
     /// Enabled only during parallel execution to detect extraneous BAL pure-access entries.
     pub accessed_accounts: Option<FxHashSet<Address>>,
+    /// Optional tracker for addresses whose balance was read by executing code.
+    /// Written only by the `BALANCE` and `SELFBALANCE` handlers, so unlike
+    /// `accessed_accounts` it excludes protocol-level access such as the coinbase
+    /// fee credit.
+    pub balance_reads: Option<FxHashSet<Address>>,
     /// Optional BAL cursor for lazy per-read prefix materialization.
     /// When set, account loads and storage reads consult the BAL before hitting the store.
     pub lazy_bal: Option<LazyBalCursor>,
@@ -243,6 +248,7 @@ impl GeneralizedDatabase {
             bal_recorder: None,
             skip_initial_tracking: false,
             accessed_accounts: None,
+            balance_reads: None,
             lazy_bal: None,
         }
     }
@@ -276,6 +282,7 @@ impl GeneralizedDatabase {
             bal_recorder: None,
             skip_initial_tracking: true,
             accessed_accounts: None,
+            balance_reads: None,
             lazy_bal: None,
         }
     }
@@ -335,6 +342,7 @@ impl GeneralizedDatabase {
             bal_recorder: None,
             skip_initial_tracking: false,
             accessed_accounts: None,
+            balance_reads: None,
             lazy_bal: None,
         }
     }

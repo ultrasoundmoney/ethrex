@@ -175,6 +175,10 @@ impl OpcodeHandler for OpSelfBalanceHandler {
             recorder.record_touched_address(address);
         }
 
+        if let Some(reads) = vm.db.balance_reads.as_mut() {
+            reads.insert(address);
+        }
+
         vm.current_call_frame.stack.push(balance)?;
 
         Ok(OpcodeResult::Continue)
