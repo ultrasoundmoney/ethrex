@@ -30,6 +30,7 @@ use ethrex_vm::{Evm, EvmError, check_2d_gas_allowance};
 
 use ethrex_rlp::encode::RLPEncode;
 use ethrex_storage::{Store, error::StoreError};
+use ethrex_trie::Trie;
 
 use ethrex_metrics::metrics;
 
@@ -954,15 +955,46 @@ impl Blockchain {
     }
 
     pub fn finalize_payload(&self, context: &mut PayloadBuildContext) -> Result<(), ChainError> {
+        self.finalize(context, false).map(|_| ())
+    }
+
+    /// Like [`Self::finalize_payload`], but also returns the post-state trie the
+    /// state root was computed on. Its nodes are in memory and already hashed,
+    /// so proofs against the new state root need no further trie work.
+    pub fn finalize_payload_with_state_trie(
+        &self,
+        context: &mut PayloadBuildContext,
+    ) -> Result<Trie, ChainError> {
+        self.finalize(context, true)?
+            .ok_or(ChainError::ParentStateNotFound)
+    }
+
+    fn finalize(
+        &self,
+        context: &mut PayloadBuildContext,
+        keep_state_trie: bool,
+    ) -> Result<Option<Trie>, ChainError> {
         // Take BAL from VM before getting state transitions (which clears state)
         let block_access_list = context.vm.take_bal();
 
         let account_updates = context.vm.get_state_transitions()?;
 
-        let ret_acount_updates_list = self
-            .storage
-            .apply_account_updates_batch(context.parent_hash(), &account_updates)?
-            .ok_or(ChainError::ParentStateNotFound)?;
+        let (ret_acount_updates_list, state_trie) = if keep_state_trie {
+            let mut state_trie = self
+                .storage
+                .state_trie(context.parent_hash())?
+                .ok_or(ChainError::ParentStateNotFound)?;
+            let updates = self
+                .storage
+                .apply_account_updates_from_trie_batch(&mut state_trie, &account_updates)?;
+            (updates, Some(state_trie))
+        } else {
+            let updates = self
+                .storage
+                .apply_account_updates_batch(context.parent_hash(), &account_updates)?
+                .ok_or(ChainError::ParentStateNotFound)?;
+            (updates, None)
+        };
 
         let state_root = ret_acount_updates_list.state_trie_hash;
 
@@ -1001,7 +1033,7 @@ impl Blockchain {
         }
 
         context.payload.header.logs_bloom = bloom_from_logs(&logs, &NativeCrypto);
-        Ok(())
+        Ok(state_trie)
     }
 }
 
