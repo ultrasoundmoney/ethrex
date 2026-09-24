@@ -494,7 +494,7 @@ impl Blockchain {
     }
 
     /// Executes a block withing a new vm instance and state
-    fn execute_block(
+    pub fn execute_block(
         &self,
         block: &Block,
     ) -> Result<(BlockExecutionResult, Vec<AccountUpdate>), ChainError> {
